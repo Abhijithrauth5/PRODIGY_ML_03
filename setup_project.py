@@ -25,66 +25,80 @@ seaborn>=0.12
 """
 
 README = """\
-# Cats vs. Dogs Image Classification with SVM
+# Cat vs. Dog Image Classification using Support Vector Machines (SVM)
 
-## Project goal
+## Project overview
 
-This internship Task-3 project demonstrates image classification with a
-scikit-learn Support Vector Machine (SVM). It includes a deterministic,
-synthetic dataset of 100 cat-like and 100 dog-like RGB pixel images so the
-workflow can be tested immediately without downloading a large image dataset.
-The mock images are flattened into pixel columns in `dataset/mock_images.csv`.
-They are for pipeline verification, not for measuring real-world accuracy.
+This project demonstrates a complete image-classification workflow that
+distinguishes cats from dogs using scikit-learn's Support Vector Classifier
+(`SVC`). It includes a small, deterministic mock pixel dataset for immediate
+pipeline verification without a large download. The synthetic data is for
+testing the workflow only; its scores do not represent real-world accuracy.
 
-## Classification architecture
+## Objective
 
-1. Load flattened RGB pixels and integer labels (`0 = Cat`, `1 = Dog`).
-2. Coerce pixel columns to numeric values, replace infinities, and impute
-   missing pixel values with each column's median (or zero if entirely empty).
-3. Split the data into stratified 80% training and 20% validation subsets.
-4. Standardize features and train an RBF-kernel SVC in a scikit-learn pipeline.
-5. Print the classification report, confusion matrix, accuracy, and
-   macro/weighted precision and recall.
+Build an image classification system utilizing a linear or RBF-kernel Support
+Vector Machine. The workflow cleans and flattens pixel features, creates a
+stratified 80/20 training/validation split, scales the features, trains an
+SVC, and reports per-class precision/recall, a classification report, and a
+confusion matrix. The RBF kernel is used by default; select `--kernel linear`
+to run a linear SVM.
 
-## Setup and run
+## Project architecture
 
-From this project directory, run:
-
-```console
-python -m venv .venv
+```text
+PRODIGY_ML_03/
+├── dataset/
+│   └── mock_images.csv       # 100 mock Cats (0) + 100 mock Dogs (1)
+├── src/
+│   └── train_svm.py          # Data cleaning, SVC training, validation metrics
+├── requirements.txt          # Python dependencies
+├── setup_project.py          # Regenerates the project and mock dataset
+└── README.md
 ```
 
-Activate the environment:
+Each CSV row represents one flattened 16 x 16 RGB image. The `label` column
+uses `0` for Cats and `1` for Dogs; remaining columns contain pixel values.
+Missing or invalid pixel values are cleaned before the stratified split.
+Standardization and SVC training are combined in a scikit-learn pipeline to
+avoid fitting preprocessing on validation samples.
 
-```powershell
-# Windows PowerShell
-.\\.venv\\Scripts\\Activate.ps1
-```
+## Installation
+
+Use Python 3.9 or newer. From the repository root, install the dependencies:
 
 ```bash
+pip install -r requirements.txt
+```
+
+Optionally create and activate a virtual environment before installing:
+
+```bash
+python -m venv .venv
+# Windows PowerShell
+.\\.venv\\Scripts\\Activate.ps1
 # macOS / Linux
 source .venv/bin/activate
 ```
 
-Install dependencies and train:
+## Run
 
-```console
-python -m pip install -r requirements.txt
+Run the default RBF SVM and print its validation report and confusion matrix:
+
+```bash
 python src/train_svm.py
 ```
 
-To use another CSV with the same `label` plus flattened pixel-column format:
+Choose the linear kernel or provide a different CSV in the same format:
 
-```console
+```bash
+python src/train_svm.py --kernel linear
 python src/train_svm.py --data path/to/images.csv
 ```
 
-## Dataset format
-
-`dataset/mock_images.csv` contains one image per row. The first column,
-`label`, is `0` for Cats or `1` for Dogs; the remaining columns contain the
-flattened 16 x 16 x 3 RGB pixel values (0-255). The generated data is
-deterministic and balanced.
+The evaluation output includes accuracy, the classification report, a
+confusion matrix (true labels by rows and predictions by columns), and
+macro/weighted precision and recall.
 """
 
 TRAIN_SCRIPT = '''\
@@ -149,7 +163,7 @@ def load_and_clean_data(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
     return X, y
 
 
-def run(data_path: Path) -> None:
+def run(data_path: Path, kernel: str = "rbf") -> None:
     X, y = load_and_clean_data(data_path)
     X_train, X_valid, y_train, y_valid = train_test_split(
         X,
@@ -161,13 +175,14 @@ def run(data_path: Path) -> None:
 
     model = make_pipeline(
         StandardScaler(),
-        SVC(kernel="rbf", C=10.0, gamma="scale", random_state=RANDOM_STATE),
+        SVC(kernel=kernel, C=10.0, gamma="scale", random_state=RANDOM_STATE),
     )
     model.fit(X_train, y_train)
     predictions = model.predict(X_valid)
 
     print(f"Loaded {len(y)} samples with {X.shape[1]} flattened pixel features.")
     print(f"Training samples: {len(y_train)} | Validation samples: {len(y_valid)}")
+    print(f"SVC kernel: {kernel}")
     print("\\nClassification report:")
     print(
         classification_report(
@@ -202,9 +217,15 @@ def main() -> int:
         default=project_root / "dataset" / "mock_images.csv",
         help="CSV with a label column followed by flattened pixel features.",
     )
+    parser.add_argument(
+        "--kernel",
+        choices=("linear", "rbf"),
+        default="rbf",
+        help="SVC kernel to use (default: rbf).",
+    )
     args = parser.parse_args()
     try:
-        run(args.data)
+        run(args.data, kernel=args.kernel)
     except (FileNotFoundError, ValueError, pd.errors.ParserError) as error:
         parser.error(str(error))
     return 0
